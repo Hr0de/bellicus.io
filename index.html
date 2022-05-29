@@ -1,12 +1,354 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <title>bellicus.io</title>
+        <link href="/css/bulb.css" rel="stylesheet"/>
+        <link href="/css/style.css" rel="stylesheet"/>
+        <link href="/css/icons.css" rel="stylesheet"/>
     </head>
     <body>
-        <p>coming soon</p>
+        <div class="row h-100">
+            <div class="col-xs-3">
+                <div id="takenRedPieces" class="row no-gutters"></div>
+            </div>
+            <div class="col-xs">
+                <div class="d-flex flex-column center-xs h-100">
+                    <div class="flex-grow-1">
+                        <div id="board" class="h-100"></div>
+                    </div>
+                    <div>
+                        <div id="piecesSuspicion"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xs-3">
+                <div id="takenBluePieces" class="row no-gutters"></div>
+            </div>
+        </div>
         <script src="/js/peerjs.min.js"></script>
+        <script src="/js/jquery.min.js"></script>
+        <script src="/js/jquery-ui.min.js"></script>
+        <script src="/js/jquery.ui.touch-punch.min.js"></script>
+        <script src="/js/bulb.js"></script>
+        <script src="/js/board.class.js"></script>
+        <script src="/js/battle.bot.class.js"></script>
+        <script src="/js/battle.friend.class.js"></script>
+        <script src="/js/functions.js"></script>
+        <script>
+            var peer;
+            var peerId = Date.now().toString(36).toUpperCase();
+            var listeners = {};
+            var battle;
+            var homeOverlay;
+
+            function createEvent(eventName, data) {
+                return {e: eventName, d: data};
+            }
+
+            function Listener(data, conn) {
+                if (typeof data.e === "string" && typeof data.d === "object") {
+                    if (typeof listeners[data.e] === "function") {
+                        listeners[data.e](data.d, conn);
+                    }
+                }
+            }
+
+            function home() {
+                Board.reset();
+                Board.setMySide(Board.randomPieces());
+
+                battle = undefined;
+
+                var div = $('<div>').addClass("d-flex flex-column h-100 text-center color-white");
+                div.append($('<div>').addClass("padding").append($('<p>').addClass("text-3").text("bellicus.io")));
+                div.append($('<div>').addClass("flex-grow-1").append($('<div>').addClass("h-100 d-flex flex-column center-xs").append([
+                    $('<div>').append($('<button>').attr('id', "battleWithFriend").text("Play with a friend").on('click', function () {
+                        var readyFunction = function () {
+                            battle.conn.send(createEvent('battle:ready', {pieces: Board.getMySidePieces()}));
+                            battle.iamReady = true;
+
+                            if (!battle.friendReady) {
+                                Bulb.overlay.closeAllFrom($('#piecesSuspicion'));
+
+                                var div = $('<div>');
+                                div.addClass("h-100 d-flex center-xs middle-xs");
+                                div.append($('<p>').addClass("color-white").text("Waiting for the friend to be ready"));
+                                Bulb.overlay.open(div, $('#piecesSuspicion'));
+                            } else {
+                                startFightIfBothReady();
+                            }
+                        };
+
+                        var startFightIfBothReady = function () {
+                            if (battle.iamReady && battle.friendReady) {
+                                Board.enableGamePositions();
+                                Bulb.overlay.closeAll();
+                                if (!battle.asked) {
+                                    battle.isMyTurn = true;
+                                }
+                            }
+                        };
+
+                        listeners['battle:accept'] = function (data, conn) {
+                            if (!battle) {
+                                battle = new FriendBattle(conn);
+                                battle.asked = true;
+
+                                Bulb.overlay.closeAll();
+
+                                Board.enableChoicePositions();
+
+                                var div = $('<div>');
+                                div.addClass("h-100 d-flex center-xs middle-xs");
+                                div.append($('<button>').text("Ready").on('click', function () {
+                                    readyFunction();
+                                }));
+                                Bulb.overlay.open(div, $('#piecesSuspicion'));
+                            }
+                        };
+                        listeners['battle:refuse'] = function (data, conn) {
+                            if (!battle) {
+                                Bulb.loader.close();
+                                Bulb.dialog.open({content: $("<div>").addClass("text-center").append($('<p>').addClass("icon-info text-3 color-info")).append($('<p>').addClass("margin-top-x05 text-2").text("Your friend has refused"))});
+                            }
+                        };
+                        listeners['battle:ready'] = function (data, conn) {
+                            if (battle && battle.conn.peer === conn.peer) {
+                                Board.setOpponentSide(data.pieces);
+                                battle.friendReady = true;
+
+                                startFightIfBothReady();
+                            }
+                        };
+                        listeners['battle:piece-movement'] = function (data, conn) {
+                            var droppable = $('.board_cell[data-r="' + data.rTo + '"][data-c="' + data.cTo + '"]').find('> div'); // Destination
+                            var draggable = $('.board_cell[data-r="' + data.rFrom + '"][data-c="' + data.cFrom + '"]').find('> div > div'); // Piece
+                            Board.pieceMovement(droppable, draggable, data.rFrom, data.cFrom, data.rTo, data.cTo, () => {
+                                battle.next();
+                            });
+                        };
+
+                        var onPeerOpen = function () {
+                            Bulb.dialog.open({
+                                content: [
+                                    $('<p>').addClass("text-center").text("Your friend code is"),
+                                    $('<p>').addClass("text-2 text-center margin-top-x05").text(peerId),
+                                    $('<div>').addClass("margin-top").append($('<div>').addClass("form-input").append($('<label>').attr('for', "friendcode").text("What is your friend's code ?")).append($('<input>').attr('id', 'friendcode').attr('name', "friendcode").attr('type', "text").val(""))),
+                                    $('<button>').attr('id', "askToFight").addClass("btn margin-top-x05").text("Ask to fight").on('click', function () {
+                                        var friendPeerId = $('#friendcode').val();
+                                        friendPeerId = friendPeerId.replace(/[\W_]+/g, "");
+                                        if (friendPeerId.trim() === "") {
+                                            return;
+                                        } else if (friendPeerId === peerId) {
+                                            Bulb.toast("You can't play against yourself", {type: "warn"});
+                                            $('#friendcode').val("");
+                                            return;
+                                        }
+
+                                        Bulb.loader.open({text: "Waiting for his response"});
+
+                                        var conn = peer.connect(friendPeerId);
+                                        conn.on('open', function () {
+                                            conn.send(createEvent('battle:ask', {}));
+                                        });
+                                        conn.on('data', function (data) {
+                                            Listener(data, conn);
+                                        });
+                                        conn.on('close', function (data) {
+                                            Bulb.dialog.open({
+                                                content: $("<div>").addClass("text-center").append($('<p>').addClass("icon-alert-triangle text-3 color-err")).append($('<p>').addClass("margin-top-x05 text-2").text("Connection closed")),
+                                                buttons: [
+                                                    {
+                                                        name: "Close",
+                                                        onClick: function () {
+                                                            Bulb.dialog.closeLast();
+                                                            home();
+                                                        }
+                                                    }
+                                                ]
+                                            });
+                                        });
+                                        conn.on('error', function (err) {
+                                            console.log(err)
+                                        });
+                                    })
+                                ],
+                                buttons: [
+                                    {
+                                        name: "Cancel"
+                                    }
+                                ]
+                            });
+                        };
+
+                        if (!peer) {
+                            Bulb.loader.open({text: "Identification"});
+
+                            peer = new Peer(peerId, {
+                                secure: true,
+                                host: 'peerjs-bellicus-io.herokuapp.com',
+                                port: 443,
+                                path: '/'
+                            });
+
+                            peer.on('open', function (id) {
+                                Bulb.loader.close();
+                                onPeerOpen();
+                            });
+
+                            peer.on('connection', function (conn) {
+                                listeners['battle:ask'] = function (data, conn) {
+                                    if (battle) {
+                                        conn.send(createEvent("battle:refuse", {}));
+                                    } else {
+                                        var fightRequestDialog = Bulb.dialog.open({
+                                            content: $('<p>').text(conn.peer + " sent you a fight request"),
+                                            buttons: [
+                                                {
+                                                    name: "Reject",
+                                                    color: "err",
+                                                    onClick: function () {
+                                                        conn.send(createEvent('battle:refuse', {}));
+                                                        Bulb.dialog.close(fightRequestDialog);
+                                                    }
+                                                },
+                                                {
+                                                    name: "Accept",
+                                                    color: "conf",
+                                                    onClick: function () {
+                                                        conn.send(createEvent('battle:accept', {}));
+                                                        Bulb.dialog.close(fightRequestDialog);
+                                                        battle = new FriendBattle(conn);
+
+                                                        Bulb.overlay.closeAll();
+
+                                                        Board.enableChoicePositions();
+
+                                                        var div = $('<div>');
+                                                        div.addClass("h-100 d-flex center-xs middle-xs");
+                                                        div.append($('<button>').text("Ready").on('click', function () {
+                                                            readyFunction();
+                                                        }));
+                                                        Bulb.overlay.open(div, $('#piecesSuspicion'));
+                                                    }
+                                                }
+                                            ]
+                                        });
+                                    }
+                                };
+
+                                conn.on('data', function (data) {
+                                    Listener(data, conn);
+                                });
+                                conn.on('close', function (data) {
+                                    Bulb.dialog.open({
+                                        content: $("<div>").addClass("text-center").append($('<p>').addClass("icon-alert-triangle text-3 color-err")).append($('<p>').addClass("margin-top-x05 text-2").text("Connection closed")),
+                                        buttons: [
+                                            {
+                                                name: "Close",
+                                                onClick: function () {
+                                                    Bulb.dialog.closeLast();
+                                                    home();
+                                                }
+                                            }
+                                        ]
+                                    });
+                                });
+                                conn.on('error', function (err) {
+                                    Bulb.dialog.open({
+                                        content: $("<div>").addClass("text-center").append($('<p>').addClass("icon-alert-triangle text-3 color-err")).append($('<p>').addClass("margin-top-x05 text-2").text(err)),
+                                        buttons: [
+                                            {
+                                                name: "Close",
+                                                onClick: function () {
+                                                    Bulb.dialog.closeLast();
+                                                    home();
+                                                }
+                                            }
+                                        ]
+                                    });
+                                });
+                            });
+
+                            peer.on('close', function () {
+                                Bulb.overlay.open($("<div>").addClass("h-100 d-flex flex-column center-xs middle-xs").append($('<p>').addClass("icon-alert-triangle text-3 color-err")).append($('<p>').addClass("margin-top-x05 text-2 color-white").text("Service link error")));
+                            });
+
+                            peer.on('disconnected', function () {
+                                Bulb.overlay.open($("<div>").addClass("h-100 d-flex flex-column center-xs middle-xs").append($('<p>').addClass("icon-alert-triangle text-3 color-err")).append($('<p>').addClass("margin-top-x05 text-2 color-white").text("Service link error")));
+                            });
+
+                            peer.on('error', function (err) {
+                                Bulb.loader.close();
+                                Bulb.dialog.open({
+                                    content: $("<div>").addClass("text-center").append($('<p>').addClass("icon-alert-triangle text-3 color-err")).append($('<p>').addClass("margin-top-x05 text-2").text(err)),
+                                    buttons: [
+                                        {
+                                            name: "Close",
+                                            onClick: function () {
+                                                Bulb.dialog.closeLast();
+                                                home();
+                                            }
+                                        }
+                                    ]
+                                });
+                            });
+                        } else {
+                            onPeerOpen();
+                        }
+                    })),
+                    $('<div>').append($('<button>').addClass("margin-top").attr('id', "battleWithBot").text("Play with a bot").on('click', function () {
+                        listeners['battle:ask'] = function (data, conn) {
+                            conn.send(createEvent('battle:refuse', {}));
+                        };
+
+                        Bulb.overlay.close(homeOverlay);
+
+                        Board.enableChoicePositions();
+
+                        var div = $('<div>');
+                        div.addClass("h-100 d-flex center-xs middle-xs");
+                        div.append($('<button>').text("Ready").on('click', function () {
+                            battle = new BotBattle();
+
+                            Board.setOpponentSide(Board.randomPieces());
+                            Board.enableGamePositions();
+                            Bulb.overlay.closeAll();
+                            battle.isMyTurn = true;
+                        }));
+                        Bulb.overlay.open(div, $('#piecesSuspicion'));
+                    }))
+                ])));
+                div.append($('<div>').addClass("padding").append($('<p>').html("bellicus.io is a <b>fanmade</b> version of Bellicus, taken from the game <a class=\"text-italic color-primary\" target=\"_blank\" href=\"https://en.wikipedia.org/wiki/Clubhouse_Games\">Clubhouse Games</a> available on Nintendo DS")));
+                div.append($('<div>').addClass("padding").append($('<a>').attr("target", "_blank").attr("href", "https://github.com/Hr0de/bellicus.io").append($('<span>').addClass("icon-github text-2 vertical-align-middle")).append($('<span>').addClass("text-italic margin-left-x05").text("Help me improve the project !"))));
+                homeOverlay = Bulb.overlay.open(div);
+
+                listeners['battle:ask'] = function (data, conn) {
+                    conn.send(createEvent('battle:refuse', {}));
+                };
+            }
+
+            function victory() {
+                battle = undefined;
+                Bulb.overlay.open($("<div>").addClass("h-100 d-flex flex-column center-xs middle-xs").append($('<p>').addClass("margin-top-x05 text-2 color-conf").text("Victory")));
+            }
+
+            function defeat() {
+                battle = undefined;
+                Bulb.overlay.open($("<div>").addClass("h-100 d-flex flex-column center-xs middle-xs").append($('<p>').addClass("margin-top-x05 text-2 color-err").text("Defeat")));
+            }
+
+            $(function () {
+                for (const type in TYPES_PIECES) {
+                    var img = $("<img>").attr("onmousedown", "return false").attr('src', "/imgs/pieces/" + TYPES_PIECES[type] + ".png").css({right: 0, left: 0, width: "4rem"});
+                    img.addClass("suspicion")._draggableSuspicion();
+                    $('#piecesSuspicion').append($('<div>').addClass("d-inline-block padding-x05").append(img));
+                }
+
+                home();
+            });
+        </script>
     </body>
 </html>
