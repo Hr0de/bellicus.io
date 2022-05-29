@@ -309,7 +309,7 @@ class Board {
             $(this).find('> div').empty();
             var type = pieces.shift();
 
-            var img = $("<img>").attr("src", "/imgs/pieces/b" + type + ".png");
+            var img = $("<img>").attr("src", "/imgs/pieces/b.png");
             img.addClass("mw-100 mh-100").css({"user-drag": "none"});
             img.attr("draggable", "false").attr("onmousedown", "return false");
             var div = $('<div>').addClass("w-100 h-100 p-relative text-center piece");
