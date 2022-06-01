@@ -376,7 +376,7 @@ class Board {
                         return;
                     }
 
-                    if ($(this).hasClass("hint")) {
+                    if (to.hasClass("hint")) {
                         var tmp = Board.cells[rTo][cTo];
                         Board.cells[rTo][cTo] = Board.cells[rFrom][cFrom];
                         Board.cells[rFrom][cFrom] = tmp;
@@ -397,7 +397,7 @@ class Board {
                     ui.helper.data('dropped', false);
 
                     var cell = ui.helper.closest(".board_cell");
-                    $('.board_cell div.hint').removeClass("hint");
+                    $('.board_cell.hint').removeClass("hint");
                     var r = parseFloat($(cell).attr('data-r')); // Ligne
                     var c = parseFloat($(cell).attr('data-c')); // Colonne
                     var piece = Board.cells[r][c];
@@ -426,7 +426,7 @@ class Board {
                                     continue;
                                 }
                             }
-                            $('.board_cell[data-r="' + i + '"][data-c="' + tmp + '"]').find('> div').addClass("hint");
+                            $('.board_cell[data-r="' + i + '"][data-c="' + tmp + '"]').addClass("hint");
                         }
                     }
                 },
@@ -436,7 +436,7 @@ class Board {
                         $(this).css({left: '', top: ''});
                         $(this).draggable('option', 'revert', false);
                     }
-                    $('.board_cell div.hint').removeClass("hint");
+                    $('.board_cell.hint').removeClass("hint");
                 }
             });
         });
@@ -454,14 +454,14 @@ class Board {
                     ui.helper.data('dropped', false);
 
                     var cell = ui.helper.closest(".board_cell");
-                    $('.board_cell div.hint').removeClass("hint");
+                    $('.board_cell.hint').removeClass("hint");
                     var r = parseFloat($(cell).attr('data-r')); // Ligne
                     var c = parseFloat($(cell).attr('data-c')); // Colonne
                     var piece = Board.cells[r][c];
 
                     var availableMovements = Board.pieceAvailableGameMovements(r, c);
                     for (var movement of availableMovements) {
-                        $('.board_cell[data-r="' + movement.r + '"][data-c="' + movement.c + '"]').find('> div').addClass("hint");
+                        $('.board_cell[data-r="' + movement.r + '"][data-c="' + movement.c + '"]').addClass("hint");
                     }
                 },
                 stop: function (event, ui) {
@@ -470,7 +470,7 @@ class Board {
                         $(this).css({left: '', top: ''});
                         $(this).draggable('option', 'revert', false);
                     }
-                    $('.board_cell div.hint').removeClass("hint");
+                    $('.board_cell.hint').removeClass("hint");
                 }
             });
 
@@ -503,7 +503,7 @@ class Board {
                         return;
                     }
 
-                    if ($(this).hasClass("hint")) {
+                    if (to.hasClass("hint")) {
                         var droppable = this;
 
                         if (battle.isMyTurn === false) {
@@ -598,7 +598,7 @@ class Board {
 
                 var img = $("<img>").attr("src", "/imgs/pieces/" + attacker.color + attacker.type + ".png");
                 img.addClass("w-100").css({"user-drag": "none"});
-                $(myPiecesSelector).append($('<div>').addClass("col-xs-3 padding-x05").append(img));
+                $(myPiecesSelector).append($('<div>').addClass("col-xs-2").append(img));
             } else if (attackerWin) {
                 attackerPiece.addClass("p-relative").css({width: "", height: "", top: "", left: "", position: ""});
                 $(droppable).empty();
@@ -609,7 +609,7 @@ class Board {
                 if (defender) {
                     var img = $("<img>").attr("src", "/imgs/pieces/" + defender.color + defender.type + ".png");
                     img.addClass("w-100").css({"user-drag": "none"});
-                    $(opponentPiecesSelector).append($('<div>').addClass("col-xs-3 padding-x05").append(img));
+                    $(opponentPiecesSelector).append($('<div>').addClass("col-xs-2").append(img));
                 }
             } else {
                 $(droppable).empty();
@@ -619,11 +619,11 @@ class Board {
 
                 var img = $("<img>").attr("src", "/imgs/pieces/" + defender.color + defender.type + ".png");
                 img.addClass("w-100").css({"user-drag": "none"});
-                $(opponentPiecesSelector).append($('<div>').addClass("col-xs-3 padding-x05").append(img));
+                $(opponentPiecesSelector).append($('<div>').addClass("col-xs-2").append(img));
 
                 var img = $("<img>").attr("src", "/imgs/pieces/" + attacker.color + attacker.type + ".png");
                 img.addClass("w-100").css({"user-drag": "none"});
-                $(myPiecesSelector).append($('<div>').addClass("col-xs-3 padding-x05").append(img));
+                $(myPiecesSelector).append($('<div>').addClass("col-xs-2").append(img));
             }
 
             if (attackerWin && defender) {

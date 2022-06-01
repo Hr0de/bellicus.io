@@ -74,7 +74,7 @@ Bulb.loader.open = function (options) {
     var container = undefined;
     if (typeof options === "object") {
         if (typeof options.text === "string") {
-            div.append($('<p>').addClass("margin-top-x05 text-14").text(options.text));
+            div.append($('<p>').addClass("margin-top-x05 text-14 text-center").text(options.text));
         }
         if (options.container instanceof jQuery) {
             container = options.container;
